@@ -1,5 +1,6 @@
 package com.example.keylogger
 
+import android.widget.ScrollView
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -57,6 +58,10 @@ class ClientActivity : AppCompatActivity() {
                 runOnUiThread {
                     val outputText = findViewById<TextView>(R.id.tvOutput)
                     outputText.append("$receivedText\n")
+
+                    // Find ScrollView directly and scroll to bottom
+                    val scrollView = findViewById<ScrollView>(R.id.scrollView)
+                    scrollView.fullScroll(ScrollView.FOCUS_DOWN)
                 }
             }
         } catch (e: Exception) {
@@ -68,7 +73,6 @@ class ClientActivity : AppCompatActivity() {
             }
         }
     }
-
     override fun onDestroy() {
         super.onDestroy()
         clientSocket?.close()
