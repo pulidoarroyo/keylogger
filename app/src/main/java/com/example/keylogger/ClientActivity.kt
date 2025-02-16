@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.Socket
+import android.view.KeyEvent
 
 class ClientActivity : AppCompatActivity() {
     private var clientSocket: Socket? = null
@@ -64,8 +65,21 @@ class ClientActivity : AppCompatActivity() {
                 val receivedText = reader.readLine() ?: break
                 runOnUiThread {
                     val outputText = findViewById<TextView>(R.id.tvOutput)
-                    outputText.append("$receivedText\n")
 
+                    // Format special keys for better visibility
+                    val formattedText = when (receivedText) {
+                        "[BACKSPACE]" -> "⌫"
+                        "[ENTER]" -> "↵\n"
+                        "[SPACE]" -> "␣"
+                        "[TAB]" -> "⇥"
+                        "[SHIFT]" -> "⇧"
+                        "[CAPS_LOCK]" -> "⇪"
+                        "[ALT]" -> "⌥"
+                        "[CTRL]" -> "⌃"
+                        else -> receivedText
+                    }
+
+                    outputText.append(formattedText)
                     val scrollView = findViewById<ScrollView>(R.id.scrollView)
                     scrollView.fullScroll(ScrollView.FOCUS_DOWN)
                 }

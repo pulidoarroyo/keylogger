@@ -15,6 +15,7 @@ import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import kotlinx.coroutines.delay
+import android.view.KeyEvent
 
 class ServerActivity : AppCompatActivity() {
     private var serverSocket: ServerSocket? = null
@@ -77,15 +78,49 @@ class ServerActivity : AppCompatActivity() {
             }
         }
 
-        // Monitor text input
-        inputEditText.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        // Enhanced key monitoring
+        inputEditText.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                val specialKey = when (keyCode) {
+                    KeyEvent.KEYCODE_DEL -> "[BACKSPACE]"
+                    KeyEvent.KEYCODE_ENTER -> "[ENTER]\n"
+                    KeyEvent.KEYCODE_SPACE -> "[SPACE]"
+                    KeyEvent.KEYCODE_TAB -> "[TAB]"
+                    KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> "[SHIFT]"
+                    KeyEvent.KEYCODE_CAPS_LOCK -> "[CAPS_LOCK]"
+                    KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_ALT_RIGHT -> "[ALT]"
+                    KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> "[CTRL]"
+                    else -> null
+                }
 
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                s?.toString()?.let { text ->
+                specialKey?.let {
                     if (isClientConnected) {
                         CoroutineScope(Dispatchers.IO).launch {
-                            sendToClient(text)
+                            sendToClient(it)
+                        }
+                    }
+                }
+            }
+            false
+        }
+
+        // Monitor text input
+        // Regular text monitoring
+        inputEditText.addTextChangedListener(object : TextWatcher {
+            private var previousText = ""
+
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+                previousText = s?.toString() ?: ""
+            }
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (isClientConnected) {
+                    val currentText = s?.toString() ?: ""
+                    // Only send the new character(s) that were added
+                    if (currentText.length > previousText.length) {
+                        val newText = currentText.substring(start, start + count)
+                        CoroutineScope(Dispatchers.IO).launch {
+                            sendToClient(newText)
                         }
                     }
                 }
