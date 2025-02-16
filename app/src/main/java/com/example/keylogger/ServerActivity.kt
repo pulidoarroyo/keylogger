@@ -14,27 +14,67 @@ import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import kotlinx.coroutines.delay
 
 class ServerActivity : AppCompatActivity() {
     private var serverSocket: ServerSocket? = null
     private var clientSocket: Socket? = null
     private val serverPort = 9999
     private var printWriter: PrintWriter? = null
+    private var isClientConnected = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_server)
 
+        val ipAddress = getLocalIpAddress()
+
+        // Find views
+        val ipText = findViewById<TextView>(R.id.tvIP)
         val statusText = findViewById<TextView>(R.id.tvStatus)
         val inputEditText = findViewById<EditText>(R.id.etInput)
 
-        // Display server IP address
-        val ipAddress = getLocalIpAddress()
-        statusText.text = "Server IP: $ipAddress\nWaiting for client..."
+        // Display IP in large, easy to read format
+        ipText.text = "Server IP: $ipAddress"
+        statusText.text = "Status: Waiting for client..."
 
         // Start server in background
         CoroutineScope(Dispatchers.IO).launch {
             startServer()
+        }
+
+        // Start a coroutine to check client connection status
+        // In your while loop that checks connection:
+        CoroutineScope(Dispatchers.IO).launch {
+            while (true) {
+                delay(1000) // Check every second
+                if (isClientConnected) {
+                    try {
+                        // Try to write to the socket to check if it's still connected
+                        if (clientSocket?.isClosed == true || !clientSocket?.isConnected!! ||
+                            printWriter?.checkError() == true) {
+                            isClientConnected = false
+                            clientSocket?.close()
+                            clientSocket = null
+                            printWriter = null
+                            runOnUiThread {
+                                findViewById<TextView>(R.id.tvStatus).text = "Status: Client disconnected. Waiting for new client..."
+                            }
+                            startServer() // Restart server to accept new connection
+                        }
+                    } catch (e: Exception) {
+                        isClientConnected = false
+                        clientSocket?.close()
+                        clientSocket = null
+                        printWriter = null
+                        runOnUiThread {
+                            findViewById<TextView>(R.id.tvStatus).text = "Status: Client disconnected. Waiting for new client..."
+                        }
+                        startServer()
+                    }
+                }
+                delay(1000)
+            }
         }
 
         // Monitor text input
@@ -43,8 +83,10 @@ class ServerActivity : AppCompatActivity() {
 
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 s?.toString()?.let { text ->
-                    CoroutineScope(Dispatchers.IO).launch {
-                        sendToClient(text)
+                    if (isClientConnected) {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            sendToClient(text)
+                        }
                     }
                 }
             }
@@ -55,16 +97,19 @@ class ServerActivity : AppCompatActivity() {
 
     private fun startServer() {
         try {
-            serverSocket = ServerSocket(serverPort)
+            if (serverSocket == null || serverSocket?.isClosed == true) {
+                serverSocket = ServerSocket(serverPort)
+            }
 
             // Wait for client connection
             clientSocket = serverSocket?.accept()
+            isClientConnected = true
 
             // Set up writer for sending data to client
             printWriter = PrintWriter(clientSocket?.getOutputStream(), true)
 
             runOnUiThread {
-                findViewById<TextView>(R.id.tvStatus).append("\nClient connected!")
+                findViewById<TextView>(R.id.tvStatus).text = "Status: Client connected!"
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -76,6 +121,7 @@ class ServerActivity : AppCompatActivity() {
             printWriter?.println(message)
         } catch (e: Exception) {
             e.printStackTrace()
+            isClientConnected = false
         }
     }
 
@@ -84,22 +130,35 @@ class ServerActivity : AppCompatActivity() {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
                 val networkInterface = interfaces.nextElement()
+
+                // Skip interfaces that are down, loopback or virtual
+                if (!networkInterface.isUp || networkInterface.isLoopback) {
+                    continue
+                }
+
                 val addresses = networkInterface.inetAddresses
                 while (addresses.hasMoreElements()) {
                     val address = addresses.nextElement()
-                    if (!address.isLoopbackAddress && address is InetAddress) {
-                        return address.hostAddress ?: "Unknown"
+
+                    // We only want IPv4 addresses
+                    if (address is java.net.Inet4Address) {
+                        val ip = address.hostAddress
+                        // Usually hotspot IPs start with 192.168 or 172. or 10.
+                        if (ip.startsWith("192.168") || ip.startsWith("172.") || ip.startsWith("10.")) {
+                            return ip
+                        }
                     }
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        return "Unknown"
+        return "IP not found"
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        isClientConnected = false
         printWriter?.close()
         clientSocket?.close()
         serverSocket?.close()
