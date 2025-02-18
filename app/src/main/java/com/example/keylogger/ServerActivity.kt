@@ -15,6 +15,18 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.Location
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import java.util.Locale
+
+private lateinit var fusedLocationClient: FusedLocationProviderClient
+private val locationPermissionCode = 2
 
 class ServerActivity : AppCompatActivity() {
     private var serverSocket: ServerSocket? = null  // Server socket for listening for client connections
@@ -24,12 +36,17 @@ class ServerActivity : AppCompatActivity() {
     private var isClientConnected = false  // Flag to track whether a client is connected
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())  // Coroutine scope for background tasks
     private var isServerRunning = false  // Flag to track the server's running state
+    private var currentLocation: Location? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_server)  // Set the layout for the server activity
 
         val ipAddress = getLocalIpAddress()  // Get the local IP address of the server
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        // Request location permissions
+        checkLocationPermission()
 
         // Find views for UI elements
         val ipText = findViewById<TextView>(R.id.tvIP)
@@ -211,5 +228,69 @@ class ServerActivity : AppCompatActivity() {
     // Log error messages (could be replaced with a proper logging mechanism)
     private fun logError(message: String) {
         println("Error: $message")  // Log the error to the console
+    }
+
+    private fun checkLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                locationPermissionCode)
+        } else {
+            getLastLocation()
+        }
+    }
+
+    private fun getLastLocation() {
+        try {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                location?.let {
+                    currentLocation = it
+                    updateLocationDisplay(it)
+                }
+            }
+        } catch (e: SecurityException) {
+            logError("Error getting location: ${e.message}")
+        }
+    }
+
+    private fun updateLocationDisplay(location: Location) {
+        val locationText = findViewById<TextView>(R.id.tvLocation)
+        locationText.text = "Location: ${location.latitude}, ${location.longitude}\n" +
+                "Accuracy: ${location.accuracy} meters"
+
+        // Get address from coordinates
+        getAddressFromLocation(location)
+    }
+
+    private fun getAddressFromLocation(location: Location) {
+        try {
+            val geocoder = Geocoder(this, Locale.getDefault())
+            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+
+            addresses?.takeIf { it.isNotEmpty() }?.get(0)?.let { address ->
+                val locationText = findViewById<TextView>(R.id.tvLocation)
+                locationText.text = "Location: ${address.locality ?: ""}, " +
+                        "${address.adminArea ?: ""}, ${address.countryName ?: ""}\n" +
+                        "Coordinates: ${location.latitude}, ${location.longitude}"
+            }
+        } catch (e: Exception) {
+            logError("Error getting address: ${e.message}")
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        when (requestCode) {
+            locationPermissionCode -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    getLastLocation()
+                }
+            }
+        }
     }
 }
