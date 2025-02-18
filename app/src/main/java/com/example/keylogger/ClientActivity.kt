@@ -1,120 +1,187 @@
 package com.example.keylogger
 
-import android.widget.ScrollView
+import android.content.DialogInterface
+import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
+import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.Socket
-import android.view.KeyEvent
 
 class ClientActivity : AppCompatActivity() {
+
+    // Declare variables for socket, connection status, and UI components
     private var clientSocket: Socket? = null
     private val serverPort = 9999
     private var isConnected = false
+    private var reader: BufferedReader? = null
+    private lateinit var connectButton: Button
+    private lateinit var disconnectButton: Button
+    private lateinit var ipInput: EditText
+    private lateinit var outputText: TextView
+    private lateinit var scrollView: ScrollView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_client)
 
-        val connectButton = findViewById<Button>(R.id.btnConnect)
-        val disconnectButton = findViewById<Button>(R.id.btnDisconnect)
-        val ipInput = findViewById<EditText>(R.id.etServerIP)
-        val outputText = findViewById<TextView>(R.id.tvOutput)
+        // Initialize views from the layout
+        connectButton = findViewById(R.id.btnConnect)
+        disconnectButton = findViewById(R.id.btnDisconnect)
+        ipInput = findViewById(R.id.etServerIP)
+        outputText = findViewById(R.id.tvOutput)
+        scrollView = findViewById(R.id.scrollView)
 
+        // Logic for the "Connect" button
         connectButton.setOnClickListener {
-            val serverIP = ipInput.text.toString()
+            val serverIP = ipInput.text.toString().trim()
             if (serverIP.isNotEmpty()) {
                 connectButton.isEnabled = false
                 connectButton.text = "Connecting..."
-
-                CoroutineScope(Dispatchers.IO).launch {
-                    connectToServer(serverIP)
-                }
+                CoroutineScope(Dispatchers.IO).launch { connectToServer(serverIP) }
+            } else {
+                showToast("Please enter a valid IP address.")
             }
         }
 
-        disconnectButton.setOnClickListener {
-            disconnectFromServer()
+        // Logic for the "Disconnect" button
+        disconnectButton.setOnClickListener { disconnectFromServer() }
+    }
+
+    // Function to handle connection to the server
+    private suspend fun connectToServer(serverIP: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                // Try to create a socket connection with the server IP and port
+                clientSocket = Socket(serverIP, serverPort)
+                reader = BufferedReader(InputStreamReader(clientSocket?.getInputStream()))
+                isConnected = true
+
+                // Update UI to indicate the successful connection
+                runOnUiThread {
+                    connectButton.text = "Connected"
+                    connectButton.isEnabled = false
+                    ipInput.isEnabled = false
+                    disconnectButton.isEnabled = true
+                    appendToOutput("Connected to server at $serverIP")
+                }
+
+                // Start listening for incoming messages from the server
+                listenForMessages()
+            } catch (e: Exception) {
+                resetConnection("Connection failed: ${e.message}")
+            }
         }
     }
 
-    private fun connectToServer(serverIP: String) {
-        try {
-            clientSocket = Socket(serverIP, serverPort)
-            isConnected = true
+    // Function to continuously listen for messages from the server
+    private suspend fun listenForMessages() {
+        withContext(Dispatchers.IO) {
+            try {
+                while (isConnected) {
+                    val receivedText = reader?.readLine() ?: break
 
-            runOnUiThread {
-                findViewById<Button>(R.id.btnConnect).text = "Connected"
-                findViewById<EditText>(R.id.etServerIP).isEnabled = false
-                findViewById<Button>(R.id.btnDisconnect).isEnabled = true
-
-                val outputText = findViewById<TextView>(R.id.tvOutput)
-                outputText.append("Connected to server at $serverIP\n")
-            }
-
-            val reader = BufferedReader(InputStreamReader(clientSocket?.getInputStream()))
-
-            while (isConnected) {
-                val receivedText = reader.readLine() ?: break
-                runOnUiThread {
-                    val outputText = findViewById<TextView>(R.id.tvOutput)
-
-                    // Format special keys for better visibility
-                    val formattedText = when (receivedText) {
-                        "[BACKSPACE]" -> "⌫"
-                        "[ENTER]" -> "↵\n"
-                        "[SPACE]" -> "␣"
-                        "[TAB]" -> "⇥"
-                        "[SHIFT]" -> "⇧"
-                        "[CAPS_LOCK]" -> "⇪"
-                        "[ALT]" -> "⌥"
-                        "[CTRL]" -> "⌃"
-                        else -> receivedText
+                    // Handle server disconnection message
+                    if (receivedText == "Server is stopping. You have been disconnected.") {
+                        runOnUiThread {
+                            showToast("Server has disconnected.")
+                        }
+                        disconnectFromServer()
+                        break
                     }
 
-                    outputText.append(formattedText)
-                    val scrollView = findViewById<ScrollView>(R.id.scrollView)
-                    scrollView.fullScroll(ScrollView.FOCUS_DOWN)
+                    // Append the received message to the UI
+                    runOnUiThread { appendToOutput(formatSpecialKeys(receivedText)) }
                 }
+            } catch (e: Exception) {
+                resetConnection("Error receiving data: ${e.message}")
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            resetConnection("Connection failed: ${e.message}")
         }
     }
 
+    // Function to disconnect from the server and reset UI
     private fun disconnectFromServer() {
         isConnected = false
-        clientSocket?.close()
+        clientSocket?.close() // Close the socket
+        clientSocket = null
+        reader?.close() // Close the reader
+        reader = null
         resetConnection("Disconnected from server")
+        navigateToMainActivity()  // Navigate to the MainActivity after disconnecting
     }
 
+    // Function to reset connection state and update UI
     private fun resetConnection(message: String) {
         runOnUiThread {
-            val button = findViewById<Button>(R.id.btnConnect)
-            button.text = "Connect"
-            button.isEnabled = true
-
-            findViewById<Button>(R.id.btnDisconnect).isEnabled = false
-            findViewById<EditText>(R.id.etServerIP).isEnabled = true
-
-            val outputText = findViewById<TextView>(R.id.tvOutput)
-            outputText.append("$message\n")
-
-            val scrollView = findViewById<ScrollView>(R.id.scrollView)
-            scrollView.fullScroll(ScrollView.FOCUS_DOWN)
+            connectButton.text = "Connect"
+            connectButton.isEnabled = true
+            disconnectButton.isEnabled = false
+            ipInput.isEnabled = true
+            appendToOutput(message)
         }
     }
 
+    // Function to navigate back to MainActivity
+    private fun navigateToMainActivity() {
+        val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+        startActivity(intent)
+        finish()  // Close ClientActivity
+    }
+
+    // Function to append the message to the output TextView
+    private fun appendToOutput(message: String) {
+        outputText.append("$message\n")
+        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+    }
+
+    // Function to format special key names into symbols
+    private fun formatSpecialKeys(input: String): String {
+        return when (input) {
+            "[BACKSPACE]" -> "⌫"
+            "[ENTER]" -> "↵\n"
+            "[SPACE]" -> "␣"
+            "[TAB]" -> "⇥"
+            "[SHIFT]" -> "⇧"
+            "[CAPS_LOCK]" -> "⇪"
+            "[ALT]" -> "⌥"
+            "[CTRL]" -> "⌃"
+            else -> input
+        }
+    }
+
+    // Function to show a toast message
+    private fun showToast(message: String) {
+        runOnUiThread { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
+    }
+
+    // Override the back button to show a confirmation dialog if connected
+    override fun onBackPressed() {
+        if (isConnected) {
+            // Show confirmation dialog
+            AlertDialog.Builder(this)
+                .setTitle("Disconnect")
+                .setMessage("Are you sure you want to disconnect and go back?")
+                .setPositiveButton("Yes") { dialog, _ ->
+                    disconnectFromServer()
+                    dialog.dismiss()
+                }
+                .setNegativeButton("No") { dialog, _ ->
+                    dialog.dismiss()
+                }
+                .create()
+                .show()
+        } else {
+            super.onBackPressed()  // Just go back if not connected
+        }
+    }
+
+    // Override onDestroy to ensure proper cleanup
     override fun onDestroy() {
         super.onDestroy()
-        disconnectFromServer()
+        disconnectFromServer()  // Disconnect from server if activity is destroyed
     }
 }

@@ -1,84 +1,58 @@
 package com.example.keylogger
 
+import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.KeyEvent
+import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import java.io.PrintWriter
-import java.net.InetAddress
+import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
-import kotlinx.coroutines.delay
-import android.view.KeyEvent
 
 class ServerActivity : AppCompatActivity() {
-    private var serverSocket: ServerSocket? = null
-    private var clientSocket: Socket? = null
-    private val serverPort = 9999
-    private var printWriter: PrintWriter? = null
-    private var isClientConnected = false
+    private var serverSocket: ServerSocket? = null  // Server socket for listening for client connections
+    private var clientSocket: Socket? = null  // Socket for handling the client connection
+    private val serverPort = 9999  // Port number on which the server listens
+    private var printWriter: PrintWriter? = null  // PrintWriter to send data to the client
+    private var isClientConnected = false  // Flag to track whether a client is connected
+    private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())  // Coroutine scope for background tasks
+    private var isServerRunning = false  // Flag to track the server's running state
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_server)
+        setContentView(R.layout.activity_server)  // Set the layout for the server activity
 
-        val ipAddress = getLocalIpAddress()
+        val ipAddress = getLocalIpAddress()  // Get the local IP address of the server
 
-        // Find views
+        // Find views for UI elements
         val ipText = findViewById<TextView>(R.id.tvIP)
         val statusText = findViewById<TextView>(R.id.tvStatus)
         val inputEditText = findViewById<EditText>(R.id.etInput)
+        val stopServerButton = findViewById<Button>(R.id.btnStopServer)
 
-        // Display IP in large, easy to read format
+        // Display the server's IP address in a large, easy-to-read format
         ipText.text = "Server IP: $ipAddress"
-        statusText.text = "Status: Waiting for client..."
+        statusText.text = "Status: Waiting for client..."  // Initial status message
 
-        // Start server in background
-        CoroutineScope(Dispatchers.IO).launch {
-            startServer()
-        }
+        // Start the server in a background coroutine
+        coroutineScope.launch { startServer() }
 
-        // Start a coroutine to check client connection status
-        // In your while loop that checks connection:
-        CoroutineScope(Dispatchers.IO).launch {
-            while (true) {
-                delay(1000) // Check every second
-                if (isClientConnected) {
-                    try {
-                        // Try to write to the socket to check if it's still connected
-                        if (clientSocket?.isClosed == true || !clientSocket?.isConnected!! ||
-                            printWriter?.checkError() == true) {
-                            isClientConnected = false
-                            clientSocket?.close()
-                            clientSocket = null
-                            printWriter = null
-                            runOnUiThread {
-                                findViewById<TextView>(R.id.tvStatus).text = "Status: Client disconnected. Waiting for new client..."
-                            }
-                            startServer() // Restart server to accept new connection
-                        }
-                    } catch (e: Exception) {
-                        isClientConnected = false
-                        clientSocket?.close()
-                        clientSocket = null
-                        printWriter = null
-                        runOnUiThread {
-                            findViewById<TextView>(R.id.tvStatus).text = "Status: Client disconnected. Waiting for new client..."
-                        }
-                        startServer()
-                    }
-                }
-                delay(1000)
+        // Continuously check the client's connection status
+        coroutineScope.launch {
+            while (isActive) {
+                delay(1000)  // Check every second
+                checkClientStatus()
             }
         }
 
-        // Enhanced key monitoring
+        // Handle key events from the input text field (e.g., for special characters like BACKSPACE, ENTER, etc.)
         inputEditText.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
                 val specialKey = when (keyCode) {
@@ -92,110 +66,150 @@ class ServerActivity : AppCompatActivity() {
                     KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> "[CTRL]"
                     else -> null
                 }
-
-                specialKey?.let {
-                    if (isClientConnected) {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            sendToClient(it)
-                        }
-                    }
-                }
+                specialKey?.let { sendToClient(it) }  // Send special key information to the client
             }
             false
         }
 
-        // Monitor text input
-        // Regular text monitoring
+        // Monitor text input and send it to the client when new text is entered
         inputEditText.addTextChangedListener(object : TextWatcher {
-            private var previousText = ""
+            private var previousText = ""  // Keep track of the previous text to detect changes
 
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
-                previousText = s?.toString() ?: ""
+                previousText = s?.toString() ?: ""  // Store the previous text before changes
             }
 
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                if (isClientConnected) {
-                    val currentText = s?.toString() ?: ""
-                    // Only send the new character(s) that were added
-                    if (currentText.length > previousText.length) {
-                        val newText = currentText.substring(start, start + count)
-                        CoroutineScope(Dispatchers.IO).launch {
-                            sendToClient(newText)
-                        }
-                    }
+                val currentText = s?.toString() ?: ""
+                if (currentText.length > previousText.length) {  // If new text was added
+                    val newText = currentText.substring(start, start + count)
+                    sendToClient(newText)  // Send the new text to the client
                 }
             }
 
             override fun afterTextChanged(s: Editable?) {}
         })
+
+        // Stop the server when the stop button is clicked
+        stopServerButton.setOnClickListener {
+            stopServer()  // Stop the server
+            navigateToMainActivity()  // Navigate to the main activity
+        }
     }
 
-    private fun startServer() {
+    // Start the server to listen for client connections
+    private suspend fun startServer() {
         try {
-            if (serverSocket == null || serverSocket?.isClosed == true) {
-                serverSocket = ServerSocket(serverPort)
+            serverSocket = ServerSocket(serverPort)  // Create a server socket to listen on the given port
+            isServerRunning = true  // Set the server as running
+            while (isServerRunning) {
+                clientSocket = serverSocket?.accept()  // Wait for a client to connect
+                isClientConnected = true  // A client has connected
+                printWriter = PrintWriter(clientSocket?.getOutputStream(), true)  // Prepare to send data to the client
+
+                // Update UI to reflect client connection
+                runOnUiThread {
+                    findViewById<TextView>(R.id.tvStatus).text = "Status: Client connected!"
+                }
+            }
+        } catch (e: Exception) {
+            logError("Error starting server: ${e.message}")  // Log error if the server fails to start
+        }
+    }
+
+    // Stop the server and clean up resources
+    private fun stopServer() {
+        try {
+            if (isClientConnected) {  // If a client is connected, inform them that the server is stopping
+                sendToClient("Server is stopping. You have been disconnected.")
             }
 
-            // Wait for client connection
-            clientSocket = serverSocket?.accept()
-            isClientConnected = true
+            isServerRunning = false  // Mark the server as stopped
+            serverSocket?.close()  // Close the server socket
+            serverSocket = null
 
-            // Set up writer for sending data to client
-            printWriter = PrintWriter(clientSocket?.getOutputStream(), true)
-
+            // Update the UI to reflect that the server has stopped
             runOnUiThread {
-                findViewById<TextView>(R.id.tvStatus).text = "Status: Client connected!"
+                findViewById<TextView>(R.id.tvStatus).text = "Status: Server stopped."
             }
+
         } catch (e: Exception) {
-            e.printStackTrace()
+            logError("Error stopping server: ${e.message}")  // Log error if the server fails to stop
         }
     }
 
+    // Navigate to the main activity
+    private fun navigateToMainActivity() {
+        val intent = Intent(this, MainActivity::class.java)  // Create an intent to navigate to the MainActivity
+        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+        startActivity(intent)
+        finish()  // Close the ServerActivity
+    }
+
+    // Check if the client is still connected
+    private fun checkClientStatus() {
+        if (clientSocket == null || clientSocket?.isClosed == true || printWriter?.checkError() == true) {
+            isClientConnected = false  // Mark client as disconnected
+            closeClientConnection()  // Close the client connection
+            runOnUiThread {
+                findViewById<TextView>(R.id.tvStatus).text = "Status: Client disconnected. Waiting for new client..."
+            }
+            if (isServerRunning) {
+                coroutineScope.launch { startServer() }  // Restart the server to wait for a new client
+            }
+        }
+    }
+
+    // Send a message to the client
     private fun sendToClient(message: String) {
-        try {
-            printWriter?.println(message)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            isClientConnected = false
-        }
-    }
-
-    private fun getLocalIpAddress(): String {
-        try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-
-                // Skip interfaces that are down, loopback or virtual
-                if (!networkInterface.isUp || networkInterface.isLoopback) {
-                    continue
-                }
-
-                val addresses = networkInterface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val address = addresses.nextElement()
-
-                    // We only want IPv4 addresses
-                    if (address is java.net.Inet4Address) {
-                        val ip = address.hostAddress
-                        // Usually hotspot IPs start with 192.168 or 172. or 10.
-                        if (ip.startsWith("192.168") || ip.startsWith("172.") || ip.startsWith("10.")) {
-                            return ip
-                        }
-                    }
-                }
+        coroutineScope.launch {
+            try {
+                printWriter?.println(message)  // Send the message to the client
+            } catch (e: Exception) {
+                logError("Error sending data: ${e.message}")  // Log error if message sending fails
+                isClientConnected = false
+                closeClientConnection()  // Close the client connection if an error occurs
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
-        return "IP not found"
     }
 
+    // Get the local IP address of the device
+    private fun getLocalIpAddress(): String {
+        return try {
+            NetworkInterface.getNetworkInterfaces().asSequence()
+                .flatMap { it.inetAddresses.asSequence() }
+                .filter { it is Inet4Address && !it.isLoopbackAddress }
+                .map { it.hostAddress }
+                .firstOrNull { it.startsWith("192.168") || it.startsWith("172.") || it.startsWith("10.") }
+                ?: "IP not found"
+        } catch (e: Exception) {
+            logError("Error fetching IP: ${e.message}")
+            "IP not found"
+        }
+    }
+
+    // Close the client connection
+    private fun closeClientConnection() {
+        try {
+            printWriter?.close()  // Close the PrintWriter
+            clientSocket?.close()  // Close the client socket
+            printWriter = null
+            clientSocket = null
+        } catch (e: Exception) {
+            logError("Error closing client connection: ${e.message}")  // Log error if closing the connection fails
+        }
+    }
+
+    // Clean up resources when the activity is destroyed
     override fun onDestroy() {
         super.onDestroy()
-        isClientConnected = false
-        printWriter?.close()
-        clientSocket?.close()
-        serverSocket?.close()
+        coroutineScope.cancel()  // Cancel all coroutines
+        closeClientConnection()  // Close the client connection
+        serverSocket?.close()  // Close the server socket
+    }
+
+    // Log error messages (could be replaced with a proper logging mechanism)
+    private fun logError(message: String) {
+        println("Error: $message")  // Log the error to the console
     }
 }
