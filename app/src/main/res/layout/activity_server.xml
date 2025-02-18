@@ -22,6 +22,16 @@
         android:textSize="16sp"
         android:layout_marginBottom="16dp"/>
 
+    /*
+    <TextView
+        android:id="@+id/tvLocation"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tvIP"
+        android:textSize="18sp"
+        android:layout_marginTop="8dp"/>
+    */
+
     <EditText
         android:id="@+id/etInput"
         android:layout_width="match_parent"

@@ -47,6 +47,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.json)
+    implementation (libs.play.services.location)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
