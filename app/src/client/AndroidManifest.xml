@@ -18,6 +18,17 @@
         android:theme="@style/Theme.Keylogger"
         tools:targetApi="31">
 
+        <activity
+            android:name=".ClientActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Keylogger">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
     </application>
 
 

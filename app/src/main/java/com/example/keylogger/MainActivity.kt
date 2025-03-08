@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.keylogger.ui.theme.KeyloggerTheme
 import android.content.Intent
+import android.provider.Settings
 import androidx.appcompat.app.AppCompatActivity
 import android.widget.Button
 

@@ -8,6 +8,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.*
 import java.io.BufferedReader
+import java.io.DataInputStream
 import java.io.InputStreamReader
 import java.net.Socket
 
@@ -17,7 +18,7 @@ class ClientActivity : AppCompatActivity() {
     private var clientSocket: Socket? = null
     private val serverPort = 9999
     private var isConnected = false
-    private var reader: BufferedReader? = null
+    private var reader: DataInputStream? = null
     private lateinit var connectButton: Button
     private lateinit var disconnectButton: Button
     private lateinit var ipInput: EditText
@@ -57,7 +58,7 @@ class ClientActivity : AppCompatActivity() {
             try {
                 // Try to create a socket connection with the server IP and port
                 clientSocket = Socket(serverIP, serverPort)
-                reader = BufferedReader(InputStreamReader(clientSocket?.getInputStream()))
+                reader = DataInputStream(clientSocket?.getInputStream())
                 isConnected = true
 
                 // Update UI to indicate the successful connection
@@ -82,19 +83,21 @@ class ClientActivity : AppCompatActivity() {
         withContext(Dispatchers.IO) {
             try {
                 while (isConnected) {
-                    val receivedText = reader?.readLine() ?: break
+                    if(reader?.available()!! > 0){
+                        val receivedText = reader?.readUTF()!!
 
-                    // Handle server disconnection message
-                    if (receivedText == "Server is stopping. You have been disconnected.") {
-                        runOnUiThread {
-                            showToast("Server has disconnected.")
+                        // Handle server disconnection message
+                        if (receivedText == "Server is stopping. You have been disconnected.") {
+                            runOnUiThread {
+                                showToast("Server has disconnected.")
+                            }
+                            disconnectFromServer()
+                            break
                         }
-                        disconnectFromServer()
-                        break
-                    }
 
-                    // Append the received message to the UI
-                    runOnUiThread { appendToOutput(formatSpecialKeys(receivedText)) }
+                        // Append the received message to the UI
+                        runOnUiThread { appendToOutput(formatSpecialKeys(receivedText)) }
+                    }
                 }
             } catch (e: Exception) {
                 resetConnection("Error receiving data: ${e.message}")

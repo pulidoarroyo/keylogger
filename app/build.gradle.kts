@@ -18,6 +18,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+
+    flavorDimensions.add("type")
+
+    productFlavors {
+        create("client") {
+            applicationId = "com.example.keylogger.client"
+        }
+        create("server") {
+            applicationId = "com.example.keylogger.server"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

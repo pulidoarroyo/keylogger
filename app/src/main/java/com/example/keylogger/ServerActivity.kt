@@ -19,6 +19,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
+import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -42,6 +43,8 @@ class ServerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_server)  // Set the layout for the server activity
 
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+
         val ipAddress = getLocalIpAddress()  // Get the local IP address of the server
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -59,7 +62,7 @@ class ServerActivity : AppCompatActivity() {
         statusText.text = "Status: Waiting for client..."  // Initial status message
 
         // Start the server in a background coroutine
-        coroutineScope.launch { startServer() }
+        //coroutineScope.launch { startServer() }
 
         // Continuously check the client's connection status
         coroutineScope.launch {
@@ -117,8 +120,7 @@ class ServerActivity : AppCompatActivity() {
     // Start the server to listen for client connections
     private suspend fun startServer() {
         try {
-            serverSocket = ServerSocket(serverPort)  // Create a server socket to listen on the given port
-            isServerRunning = true  // Set the server as running
+            //serverSocket = ServerSocket(serverPort)  // Create a server socket to listen on the given port
             while (isServerRunning) {
                 clientSocket = serverSocket?.accept()  // Wait for a client to connect
                 isClientConnected = true  // A client has connected
@@ -172,7 +174,7 @@ class ServerActivity : AppCompatActivity() {
                 findViewById<TextView>(R.id.tvStatus).text = "Status: Client disconnected. Waiting for new client..."
             }
             if (isServerRunning) {
-                coroutineScope.launch { startServer() }  // Restart the server to wait for a new client
+                coroutineScope.launch { /*startServer()*/ }  // Restart the server to wait for a new client
             }
         }
     }

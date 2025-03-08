@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">keylogger</string>
+    <string name="label">SO Keylogger</string>
+    <string name="description">Keylogger de sistema operativo</string>
 </resources>
