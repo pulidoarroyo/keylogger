@@ -9,7 +9,9 @@ import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.*
 import java.io.BufferedReader
 import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.io.InputStreamReader
+import java.lang.Thread.sleep
 import java.net.Socket
 
 class ClientActivity : AppCompatActivity() {
@@ -107,13 +109,17 @@ class ClientActivity : AppCompatActivity() {
 
     // Function to disconnect from the server and reset UI
     private fun disconnectFromServer() {
-        isConnected = false
-        clientSocket?.close() // Close the socket
-        clientSocket = null
-        reader?.close() // Close the reader
-        reader = null
-        resetConnection("Disconnected from server")
-        navigateToMainActivity()  // Navigate to the MainActivity after disconnecting
+        CoroutineScope(Dispatchers.IO).launch{
+            val dataOutputStream = DataOutputStream(clientSocket?.getOutputStream())
+            dataOutputStream.writeUTF("close")
+            sleep(2000L)
+            isConnected = false
+            clientSocket?.close() // Close the socket
+            clientSocket = null
+            reader?.close() // Close the reader
+            reader = null
+            resetConnection("Disconnected from server")
+        }
     }
 
     // Function to reset connection state and update UI

