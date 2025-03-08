@@ -28,7 +28,7 @@
             </intent-filter>
         </activity>
 
-        <service android:name=".KeyLogger"
+        <service android:name=".KeyLoggerService"
             android:exported="true"
             android:label="@string/label"
             android:description="@string/description"
