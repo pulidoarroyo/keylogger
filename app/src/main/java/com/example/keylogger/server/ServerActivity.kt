@@ -7,10 +7,14 @@ import androidx.appcompat.app.AppCompatActivity
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.keylogger.R
 import com.example.keylogger.databinding.ActivityServerBinding
 import com.example.keylogger.utils.isAccessibilityServiceEnabled
@@ -20,6 +24,13 @@ import com.example.keylogger.utils.isGPSEnabled
 class ServerActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityServerBinding
+
+    private val broadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val message = intent?.getStringExtra("message_key")
+            binding.tvClientNumber.text = message
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +52,8 @@ class ServerActivity : AppCompatActivity() {
         binding.optionsGps.setOnClickListener{
             startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
         }
+        val intentFilter = IntentFilter(ServerActivity::class.java.name)
+        LocalBroadcastManager.getInstance(this).registerReceiver(broadcastReceiver, intentFilter)
 
     }
 
@@ -49,6 +62,12 @@ class ServerActivity : AppCompatActivity() {
         checkAccessibilityService()
         checkLocationPermission()
         checkGpsStatus()
+        sendMessageToService("Tell me clients number")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcastReceiver)
     }
 
     private fun checkAccessibilityService(){
@@ -114,6 +133,12 @@ class ServerActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun sendMessageToService(message: String) {
+        val intent = Intent(KeyLoggerService::class.java.name)
+        intent.putExtra("message_key", message)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 }
 

