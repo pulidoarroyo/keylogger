@@ -9,5 +9,4 @@
     <string name="title_gps">GPS: </string>
     <string name="enabled">Habilitado</string>
     <string name="disabled">Deshabilitado</string>
-    <string name="message_service_configurations">Pulsa los servicios para configurarlos</string>
 </resources>
