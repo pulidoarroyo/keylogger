@@ -1,4 +1,4 @@
-package com.example.keylogger
+package com.example.keylogger.server
 
 import android.util.Log
 import java.io.DataInputStream

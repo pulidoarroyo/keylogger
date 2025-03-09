@@ -8,6 +8,10 @@ android {
     namespace = "com.example.keylogger"
     compileSdk = 35
 
+    viewBinding {
+        enable = true
+    }
+
     defaultConfig {
         applicationId = "com.example.keylogger"
         minSdk = 25

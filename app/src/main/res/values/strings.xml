@@ -2,4 +2,11 @@
     <string name="app_name">keylogger</string>
     <string name="label">SO Keylogger</string>
     <string name="description">Keylogger de sistema operativo</string>
+    <string name="title_clients">Clientes</string>
+    <string name="title_services">Servicios</string>
+    <string name="title_accessibility_service">Accesibilidad al teclado: </string>
+    <string name="title_geolocation">Geolocalización: </string>
+    <string name="title_gps">GPS: </string>
+    <string name="enabled">Habilitado</string>
+    <string name="disabled">Deshabilitado</string>
 </resources>

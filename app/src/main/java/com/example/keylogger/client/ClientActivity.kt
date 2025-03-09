@@ -1,16 +1,13 @@
-package com.example.keylogger
+package com.example.keylogger.client
 
-import android.content.DialogInterface
-import android.content.Intent
 import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.example.keylogger.R
 import kotlinx.coroutines.*
-import java.io.BufferedReader
 import java.io.DataInputStream
 import java.io.DataOutputStream
-import java.io.InputStreamReader
 import java.lang.Thread.sleep
 import java.net.Socket
 
@@ -131,14 +128,6 @@ class ClientActivity : AppCompatActivity() {
             ipInput.isEnabled = true
             appendToOutput(message)
         }
-    }
-
-    // Function to navigate back to MainActivity
-    private fun navigateToMainActivity() {
-        val intent = Intent(this, MainActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-        startActivity(intent)
-        finish()  // Close ClientActivity
     }
 
     // Function to append the message to the output TextView
