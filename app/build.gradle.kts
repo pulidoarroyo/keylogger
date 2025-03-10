@@ -28,9 +28,13 @@ android {
     productFlavors {
         create("client") {
             applicationId = "com.example.keylogger.client"
+            // Set name for the client app
+            resValue("string", "app_name", "Keylogger Client")
         }
         create("server") {
             applicationId = "com.example.keylogger.server"
+            // Set name for the server app
+            resValue("string", "app_name", "Keylogger Server")
         }
     }
 
